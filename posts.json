@@ -1,5 +1,5 @@
 {
-  "launch_date": null,
+  "launch_date": "2026-10-30",
   "timezone_utc_offset": "+03:00",
   "note": "launch_date를 'YYYY-MM-DD'로 넣으면 day/time 기준으로 게시 시각이 정해집니다. 터키 시간(UTC+3).",
   "posts": [
