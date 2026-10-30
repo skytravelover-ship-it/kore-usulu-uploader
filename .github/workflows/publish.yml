@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main   # always the latest state.json, even if this run waited in the queue
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

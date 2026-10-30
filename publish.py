@@ -136,7 +136,7 @@ class Api:
         d = (r.get("data") or [{}])[0]
         return d.get("config", {}).get("quota_total", 50) - d.get("quota_usage", 0)
 
-    def publish_carousel(self, urls, caption, comment):
+    def publish_carousel(self, urls, caption):
         children = []
         for u in urls:
             c = self.call("POST", f"{self.user}/media", image_url=u, is_carousel_item="true")["id"]
@@ -145,12 +145,21 @@ class Api:
         parent = self.call("POST", f"{self.user}/media", media_type="CAROUSEL",
                            children=",".join(children), caption=caption)["id"]
         self.wait_ready(parent)
-        media = self.call("POST", f"{self.user}/media_publish", creation_id=parent)["id"]
-        comment_id = None
-        if comment:
-            comment_id = self.call("POST", f"{media}/comments", message=comment).get("id")
-        link = self.call("GET", media, fields="permalink").get("permalink")
-        return media, comment_id, link
+        return self.call("POST", f"{self.user}/media_publish", creation_id=parent)["id"]
+
+    def after_publish(self, media, comment):
+        """Comment and permalink. Errors here never undo a publish."""
+        comment_id = link = None
+        try:
+            if comment:
+                comment_id = self.call("POST", f"{media}/comments", message=comment).get("id")
+        except Exception as e:
+            print(f"    ⚠ 첫 댓글 실패: {e}")
+        try:
+            link = self.call("GET", media, fields="permalink").get("permalink")
+        except Exception as e:
+            print(f"    ⚠ 링크 조회 실패: {e}")
+        return comment_id, link
 
 
 def main():
@@ -202,9 +211,13 @@ def main():
             print(f"\n[모의] {p['id']}: {len(urls)}장, 캡션 {len(caption)}자, 첫 댓글 {'있음' if comment else '없음'}")
             print("   " + urls[0])
             continue
-        media, comment_id, link = api.publish_carousel(urls, caption, comment)
-        state[p["id"]] = {"media_id": media, "comment_id": comment_id, "permalink": link,
+        media = api.publish_carousel(urls, caption)
+        # record right away so a later error can never cause a second post
+        state[p["id"]] = {"media_id": media,
                           "published_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        save_state(state)
+        comment_id, link = api.after_publish(media, comment)
+        state[p["id"]].update(comment_id=comment_id, permalink=link)
         save_state(state)
         print(f"[{p['id']}] 게시 완료 {link}")
 

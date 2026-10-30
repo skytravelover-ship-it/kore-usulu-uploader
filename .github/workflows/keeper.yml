@@ -1,0 +1,54 @@
+name: Instagram keeper
+
+# Backup for the cron schedule, which GitHub may delay or skip.
+# One run checks every 5 minutes for ~5h45m, then starts the next run itself.
+# It stops by itself when every scheduled post is published.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: instagram-publish
+  cancel-in-progress: false
+
+jobs:
+  keep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Publish every 5 minutes
+        env:
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_API_HOST: ${{ vars.IG_API_HOST || 'graph.instagram.com' }}
+          IMAGE_BASE_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/posts
+        run: |
+          git config user.name "instagram-bot"
+          git config user.email "instagram-bot@users.noreply.github.com"
+          end=$((SECONDS + 20400))   # 5h40m
+          while [ $SECONDS -lt $end ]; do
+            git pull -q --rebase origin main || true
+            python3 publish.py || echo "publish.py 오류 (다음 회차에 다시 시도)"
+            if [ -n "$(git status --porcelain state.json)" ]; then
+              git add state.json
+              git commit -qm "Record published posts"
+              git push -q origin HEAD:main || { git pull -q --rebase origin main && git push -q origin HEAD:main; }
+            fi
+            left=$(python3 -c "import json,os;c=json.load(open('posts.json'));s=json.load(open('state.json')) if os.path.exists('state.json') else {};print(sum(1 for p in c['posts'] if p['id'] not in s))")
+            if [ "$left" = "0" ]; then echo "모든 게시물 완료, 종료"; echo "DONE=1" >> "$GITHUB_ENV"; break; fi
+            sleep 300
+          done
+      - name: Start next run
+        if: env.DONE != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run keeper.yml -R ${{ github.repository }} --ref main
