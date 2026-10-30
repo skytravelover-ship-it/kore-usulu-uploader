@@ -42,6 +42,14 @@
       "day": 7,
       "time": "20:30",
       "title": "E. 돌잡이 vs diş buğdayı"
+    },
+    {
+      "id": "06-giydirme",
+      "src": "카드뉴스/F_옷입히기",
+      "prefix": "F",
+      "day": 9,
+      "time": "20:30",
+      "title": "F. 아기 옷 입히기 (실내 온도)"
     }
   ]
 }
