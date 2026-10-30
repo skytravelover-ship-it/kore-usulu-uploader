@@ -48,11 +48,10 @@ GitHub Actions가 30분마다 확인하므로 Mac이 꺼져 있어도 올라갑�
 - **하나만 지금 올리기:** `python3 publish.py --only 04-destek` (Actions에서 하려면 로컬에서 환경변수 3개를 넣고 실행)
 - **첫 댓글 고정:** API로는 고정이 안 됩니다. 올라간 뒤 앱에서 첫 댓글을 길게 눌러 고정합니다.
 
-## 토큰 갱신 (60일마다, 놓치면 업로드 중단)
-50일쯤 되면 아래 주소를 브라우저에서 열고, 나온 새 토큰으로 `IG_ACCESS_TOKEN` 시크릿을 바꿉니다.
-```
-https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=지금토큰
-```
+## 토큰
+- 지금 쓰는 토큰은 비즈니스 포트폴리오의 **시스템 사용자 토큰**이라 만료되지 않습니다 (2026-10-30 발급).
+- 이 토큰은 `graph.facebook.com`에서만 작동합니다. 저장소 변수 `IG_API_HOST`에 넣어 두었습니다.
+- 토큰을 잃어버리거나 유출되면: 개발자 앱 → 사용 사례 → Instagram API → 2단계에서 koreli.mom의 Generate token으로 새로 만들고 `IG_ACCESS_TOKEN` 시크릿을 바꿉니다.
 
 ## 안전장치
 - 이미 올린 게시물은 `state.json`에 남아 다시 올리지 않습니다.
