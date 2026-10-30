@@ -1,4 +1,4 @@
-# 인스타 자동 업로드 (@kore.usulu.annelik)
+# 인스타 자동 업로드 (@koreli.mom)
 
 정해진 시간에 카드뉴스 캐러셀을 인스타그램 공식 API로 올리고, 첫 댓글까지 답니다.
 GitHub Actions가 30분마다 확인하므로 Mac이 꺼져 있어도 올라갑니다.
