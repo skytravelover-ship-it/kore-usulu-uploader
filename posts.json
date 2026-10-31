@@ -82,6 +82,20 @@
       "day": 3,
       "time": "20:30",
       "title": "J. 세배 vs el öpme"
+    },
+    {
+      "id": "r01-joriwon",
+      "type": "reel",
+      "day": 1,
+      "time": "19:50",
+      "title": "릴스: 산후조리원"
+    },
+    {
+      "id": "r10-sebae",
+      "type": "reel",
+      "day": 3,
+      "time": "20:00",
+      "title": "릴스: 세배"
     }
   ]
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish due carousel posts to Instagram via the official Graph API.
+"""Publish due carousel and reel posts to Instagram via the official Graph API.
 
 Usage
   python3 publish.py --check            # validate files and show the schedule (no network)
@@ -78,11 +78,19 @@ def jpeg_size(path):
 def check_post(post):
     """Return (images, caption, comment, problems)."""
     folder = HERE / "posts" / post["id"]
-    images = sorted(folder.glob("*.jpg"))
     problems = []
-    if not 2 <= len(images) <= 10:
+    if post.get("type") == "reel":
+        video = folder / "reel.mp4"
+        images = [video] if video.exists() else []
+        if not images:
+            problems.append("reel.mp4 없음")
+        elif video.stat().st_size > 300 * 1024 * 1024:
+            problems.append("영상 300MB 초과")
+    else:
+        images = sorted(folder.glob("*.jpg"))
+    if post.get("type") != "reel" and not 2 <= len(images) <= 10:
         problems.append(f"이미지 {len(images)}장 (2~10장이어야 함)")
-    for img in images:
+    for img in (i for i in images if i.suffix == ".jpg"):
         if img.stat().st_size > MAX_JPEG:
             problems.append(f"{img.name} 8MB 초과")
         w, h = jpeg_size(img)
@@ -121,8 +129,8 @@ class Api:
         except urllib.error.HTTPError as e:
             raise RuntimeError(f"{method} {path} → {e.code} {e.read().decode()[:500]}") from None
 
-    def wait_ready(self, container):
-        for _ in range(30):
+    def wait_ready(self, container, tries=30):
+        for _ in range(tries):
             status = self.call("GET", container, fields="status_code").get("status_code")
             if status == "FINISHED":
                 return
@@ -146,6 +154,24 @@ class Api:
                            children=",".join(children), caption=caption)["id"]
         self.wait_ready(parent)
         return self.call("POST", f"{self.user}/media_publish", creation_id=parent)["id"]
+
+    def publish_reel(self, path, url, caption):
+        """Upload the file directly (resumable); fall back to video_url. Nothing is posted until media_publish."""
+        params = dict(media_type="REELS", caption=caption, share_to_feed="true")
+        try:
+            r = self.call("POST", f"{self.user}/media", upload_type="resumable", **params)
+            data = path.read_bytes()
+            req = urllib.request.Request(r["uri"], data=data, method="POST", headers={
+                "Authorization": f"OAuth {self.token}", "offset": "0", "file_size": str(len(data))})
+            with urllib.request.urlopen(req, timeout=300) as resp:
+                print(f"    업로드: {resp.read().decode()[:200]}")
+            container = r["id"]
+            self.wait_ready(container, tries=60)
+        except Exception as e:
+            print(f"    ⚠ 직접 업로드 실패, URL 방식으로 재시도: {e}")
+            container = self.call("POST", f"{self.user}/media", video_url=url, **params)["id"]
+            self.wait_ready(container, tries=60)
+        return self.call("POST", f"{self.user}/media_publish", creation_id=container)["id"]
 
     def after_publish(self, media, comment):
         """Comment and permalink. Errors here never undo a publish."""
@@ -208,11 +234,12 @@ def main():
             print(f"[{p['id']}] 문제가 있어 건너뜀")
             continue
         urls = [f"{base}/{p['id']}/{img.name}" for img in images]
+        is_reel = p.get("type") == "reel"
         if a.dry_run:
             print(f"\n[모의] {p['id']}: {len(urls)}장, 캡션 {len(caption)}자, 첫 댓글 {'있음' if comment else '없음'}")
             print("   " + urls[0])
             continue
-        media = api.publish_carousel(urls, caption)
+        media = api.publish_reel(images[0], urls[0], caption) if is_reel else api.publish_carousel(urls, caption)
         # record right away so a later error can never cause a second post
         state[p["id"]] = {"media_id": media,
                           "published_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
