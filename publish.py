@@ -95,8 +95,8 @@ def check_post(post):
         problems.append("caption.txt 없음")
     if len(caption) > 2200:
         problems.append(f"캡션 {len(caption)}자 (2,200자 이하)")
-    if caption.count("#") > 30:
-        problems.append("해시태그 30개 초과")
+    if caption.count("#") > 5:  # Instagram cap since 2025-12
+        problems.append("해시태그 5개 초과")
     return images, caption, comment, problems
 
 
@@ -181,7 +181,8 @@ def main():
         print(f"{p['id']:12} {len(images)}장  {when.strftime('%Y-%m-%d %H:%M') if when else '----'}  {tag}")
         for pr in problems:
             print(f"    ⚠ {pr}")
-            bad = True
+            if not done:
+                bad = True
         if done:
             continue
         if a.only and p["id"] == a.only:
