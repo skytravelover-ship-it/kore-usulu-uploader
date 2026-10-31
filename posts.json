@@ -32,22 +32,22 @@
       "src": "카드뉴스/D_출산지원금",
       "prefix": "D",
       "day": 1,
-      "time": "20:30",
+      "time": "12:00",
       "title": "D. 출산 지원금"
     },
     {
       "id": "05-doljabi",
       "src": "카드뉴스/E_돌잡이",
       "prefix": "E",
-      "day": 7,
-      "time": "20:30",
+      "day": 1,
+      "time": "16:00",
       "title": "E. 돌잡이 vs diş buğdayı"
     },
     {
       "id": "06-giydirme",
       "src": "카드뉴스/F_옷입히기",
       "prefix": "F",
-      "day": 9,
+      "day": 1,
       "time": "20:30",
       "title": "F. 아기 옷 입히기 (실내 온도)"
     }
