@@ -74,6 +74,14 @@
       "day": 2,
       "time": "20:30",
       "title": "I. 한국 다섯 살의 하루"
+    },
+    {
+      "id": "10-sebae",
+      "src": "카드뉴스/J_세배",
+      "prefix": "J",
+      "day": 3,
+      "time": "20:30",
+      "title": "J. 세배 vs el öpme"
     }
   ]
 }
