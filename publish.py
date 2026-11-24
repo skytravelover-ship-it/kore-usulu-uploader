@@ -144,7 +144,18 @@ class Api:
         d = (r.get("data") or [{}])[0]
         return d.get("config", {}).get("quota_total", 50) - d.get("quota_usage", 0)
 
-    def publish_carousel(self, urls, caption):
+    def find_existing(self, caption, since=None):
+        """Return the newest account media whose caption equals `caption` (optionally posted after `since`)."""
+        r = self.call("GET", f"{self.user}/media", fields="id,caption,permalink,timestamp", limit=50)
+        for m in r.get("data", []):
+            if (m.get("caption") or "").strip() != caption.strip():
+                continue
+            if since and datetime.strptime(m["timestamp"], "%Y-%m-%dT%H:%M:%S%z") < since:
+                continue
+            return m
+        return None
+
+    def publish_carousel(self, urls, caption, on_commit=lambda: None):
         children = []
         for u in urls:
             c = self.call("POST", f"{self.user}/media", image_url=u, is_carousel_item="true")["id"]
@@ -153,9 +164,10 @@ class Api:
         parent = self.call("POST", f"{self.user}/media", media_type="CAROUSEL",
                            children=",".join(children), caption=caption)["id"]
         self.wait_ready(parent)
+        on_commit()
         return self.call("POST", f"{self.user}/media_publish", creation_id=parent)["id"]
 
-    def publish_reel(self, path, url, caption):
+    def publish_reel(self, path, url, caption, on_commit=lambda: None):
         """Upload the file directly (resumable); fall back to video_url. Nothing is posted until media_publish."""
         params = dict(media_type="REELS", caption=caption, share_to_feed="true")
         try:
@@ -171,6 +183,7 @@ class Api:
             print(f"    ⚠ 직접 업로드 실패, URL 방식으로 재시도: {e}")
             container = self.call("POST", f"{self.user}/media", video_url=url, **params)["id"]
             self.wait_ready(container, tries=60)
+        on_commit()
         return self.call("POST", f"{self.user}/media_publish", creation_id=container)["id"]
 
     def after_publish(self, media, comment):
@@ -203,7 +216,7 @@ def main():
         images, caption, comment, problems = check_post(p)
         when = due_at(cfg, p)
         done = p["id"] in state
-        tag = "게시됨" if done else ("시각 미정" if when is None else ("대기" if when > now else "게시 시각 지남"))
+        tag = ("게시됨" if state[p["id"]].get("media_id") else "⛔ 확인 필요(자동 재시도 안 함)") if done else ("시각 미정" if when is None else ("대기" if when > now else "게시 시각 지남"))
         print(f"{p['id']:12} {len(images)}장  {when.strftime('%Y-%m-%d %H:%M') if when else '----'}  {tag}")
         for pr in problems:
             print(f"    ⚠ {pr}")
@@ -239,7 +252,47 @@ def main():
             print(f"\n[모의] {p['id']}: {len(urls)}장, 캡션 {len(caption)}자, 첫 댓글 {'있음' if comment else '없음'}")
             print("   " + urls[0])
             continue
-        media = api.publish_reel(images[0], urls[0], caption) if is_reel else api.publish_carousel(urls, caption)
+        # Never post what is already on the account (Instagram can publish and still answer with an error).
+        found = api.find_existing(caption)
+        if found:
+            state[p["id"]] = {"media_id": found["id"], "published_at": found["timestamp"],
+                              "permalink": found.get("permalink"), "note": "계정에 이미 있어 기록만 함"}
+            save_state(state)
+            print(f"[{p['id']}] 이미 계정에 있음 → 기록만 하고 건너뜀 {found.get('permalink')}")
+            continue
+        started = datetime.now(timezone.utc) - timedelta(minutes=2)
+
+        def on_commit(pid=p["id"]):
+            # written before media_publish: from here on this post is never retried automatically
+            state[pid] = {"status": "attempting", "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            save_state(state)
+
+        try:
+            media = (api.publish_reel(images[0], urls[0], caption, on_commit) if is_reel
+                     else api.publish_carousel(urls, caption, on_commit))
+        except Exception as e:
+            if p["id"] not in state:
+                raise  # failed before media_publish: nothing was posted, safe to retry later
+            print(f"[{p['id']}] ⚠ 게시 요청이 오류로 끝남: {str(e)[:300]}")
+            found = None
+            for _ in range(6):
+                time.sleep(20)
+                try:
+                    found = api.find_existing(caption, since=started)
+                except Exception as e2:
+                    print(f"    ⚠ 확인 조회 실패: {str(e2)[:200]}")
+                if found:
+                    break
+            if found:
+                state[p["id"]] = {"media_id": found["id"], "published_at": found["timestamp"],
+                                  "permalink": found.get("permalink"), "note": "오류 응답이었지만 실제로 게시됨"}
+                print(f"[{p['id']}] 오류 응답이었지만 실제 게시 확인 {found.get('permalink')}")
+            else:
+                state[p["id"]] = {"status": "blocked", "error": str(e)[:300],
+                                  "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+                print(f"[{p['id']}] ⛔ 게시 확인 안 됨. 자동 재시도하지 않음 (state.json에서 지워야 다시 시도)")
+            save_state(state)
+            break  # stop this run: do not touch other posts while the account is in an error state
         # record right away so a later error can never cause a second post
         state[p["id"]] = {"media_id": media,
                           "published_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}

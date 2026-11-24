@@ -42,10 +42,14 @@ def main():
     now = datetime.now(timezone.utc)
     due = []
     for pid, s in state.items():
+        if not s.get("media_id"):
+            print(f"⛔ {pid}: 게시 확인 안 됨 ({s.get('status')}) 사람이 확인해야 함")
+            continue
         at = datetime.fromisoformat(s["published_at"])
         if pid not in reported and now - at >= timedelta(hours=2):
             due.append((pid, at, s))
-    if not due:
+    audit_only = "--audit" in sys.argv
+    if not due and not audit_only:
         print("NONE")
         return
 
@@ -73,7 +77,9 @@ def main():
     no_perm = False
     for line in log.splitlines():
         text = re.sub(r"^.*?\d{4}-\d\d-\d\dT[\d:.]+Z ", "", line)
-        if text.startswith("계정:") or re.match(r"^\[[\w-]+\] 좋아요", text):
+        if "감사" in text or text.startswith("⚠ 중복") or "AUDIT" in text or "게시 확인 안 됨" in text:
+            print(text[:200])
+        elif text.startswith("계정:") or re.match(r"^\[[\w-]+\] 좋아요", text):
             print(text[:200])
         elif "조회 실패" in text and "(#10)" in text:
             no_perm = True

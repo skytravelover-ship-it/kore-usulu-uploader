@@ -28,6 +28,9 @@ print("계정:", json.dumps(acct, ensure_ascii=False))
 
 state = json.loads((HERE / "state.json").read_text()) if (HERE / "state.json").exists() else {}
 for pid, s in state.items():
+    if not s.get("media_id"):
+        print(f"\n[{pid}] ⛔ 게시 확인 안 됨: {s.get('status')} {s.get('error', '')[:120]}")
+        continue
     m = get(s["media_id"], fields="like_count,comments_count,timestamp")
     print(f"\n[{pid}] 좋아요 {m.get('like_count')} / 댓글 {m.get('comments_count')} / {m.get('timestamp')}")
     for metric in ["reach", "views", "saved", "shares", "total_interactions"]:
@@ -47,7 +50,7 @@ while path:
     media += r.get("data", [])
     after = r.get("paging", {}).get("cursors", {}).get("after") if r.get("paging", {}).get("next") else None
     path, params = (path, dict(params, after=after)) if after else (None, params)
-known = {s["media_id"]: pid for pid, s in state.items()}
+known = {s["media_id"]: pid for pid, s in state.items() if s.get("media_id")}
 print(f"\n== 감사: 실제 게시물 {len(media)}개 / 기록된 게시물 {len(known)}개")
 groups = {}
 for m in media:
