@@ -36,3 +36,28 @@ for pid, s in state.items():
             print(f"   {metric}: 조회 실패 {r['error'][:160]}")
         else:
             print(f"   {metric}: {r['data'][0]['values'][0]['value']}")
+
+# Audit: compare what is really on the account with what state.json says.
+media, path, params = [], f"{USER}/media", dict(fields="id,caption,permalink,timestamp,media_type", limit=100)
+while path:
+    r = get(path, **params)
+    if "error" in r:
+        print("실제 게시물 조회 실패", r["error"][:200])
+        break
+    media += r.get("data", [])
+    after = r.get("paging", {}).get("cursors", {}).get("after") if r.get("paging", {}).get("next") else None
+    path, params = (path, dict(params, after=after)) if after else (None, params)
+known = {s["media_id"]: pid for pid, s in state.items()}
+print(f"\n== 감사: 실제 게시물 {len(media)}개 / 기록된 게시물 {len(known)}개")
+groups = {}
+for m in media:
+    key = (m.get("media_type"), (m.get("caption") or "").strip()[:80])
+    groups.setdefault(key, []).append(m)
+for (mtype, cap), items in groups.items():
+    extra = [m for m in items if m["id"] not in known]
+    if len(items) > 1 or extra:
+        print(f"⚠ 중복/미기록 {len(items)}개 [{mtype}] {cap[:40]!r}")
+        for m in sorted(items, key=lambda m: m["timestamp"]):
+            print(f"   AUDIT {m['id']} {m['timestamp']} {m['permalink']} {'기록:' + known[m['id']] if m['id'] in known else '미기록'}")
+if len(media) == len(known) and all(len(v) == 1 for v in groups.values()):
+    print("감사 통과: 중복 없음")
